@@ -3,6 +3,7 @@ package org.mapdb
 import org.eclipse.collections.impl.list.mutable.primitive.LongArrayList
 import org.mapdb.DataIO.*
 import org.mapdb.StoreDirectJava.*
+import org.mapdb.volume.RandomAccessFileVol
 import org.mapdb.volume.Volume
 import org.mapdb.volume.VolumeFactory
 import java.io.File
@@ -752,8 +753,12 @@ class StoreDirect(
             Utils.lockWriteAll(locks)
             try {
                 Utils.lock(structuralLock) {
-                    //TODO use file for compaction, if store is file based
-                    val store2 = StoreDirect.make(isThreadSafe = false, concShift = 0)
+                    val store2 = if (file == null) {
+                        StoreDirect.make(isThreadSafe = false, concShift = 0)
+                    } else {
+                        StoreDirect.make(file = "$file.compact", volumeFactory = RandomAccessFileVol.FACTORY,
+                                fileDeleteAfterClose = true, isThreadSafe = false, checksumHeaderBypass = true)
+                    }
 
                     //first allocate enough index pages, so they are at beginning of store
                     for (i in 0 until indexPages.size())
