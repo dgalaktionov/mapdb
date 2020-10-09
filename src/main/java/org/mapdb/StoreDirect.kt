@@ -285,7 +285,7 @@ class StoreDirect(
         val masterLinkVal:Long = parity4Get(volume.getLong(masterLinkOffset))
         if (masterLinkVal == 0L) {
             //empty stack, create new chunk
-            longStackNewChunk(masterLinkOffset, 0L, value, valueSize, true)
+            longStackNewChunk(masterLinkOffset, 0L, value, valueSize)
             return
         }
         val chunkOffset = masterLinkVal and MOFFSET
@@ -297,7 +297,7 @@ class StoreDirect(
         if (currSize + valueSize > pageSize) {
             //no there is not enough space
             //allocate new chunk
-            longStackNewChunk(masterLinkOffset, chunkOffset, value, valueSize, true) //TODO recursive=true here is too paranoid, and could be improved
+            longStackNewChunk(masterLinkOffset, chunkOffset, value, valueSize)
             return
         }
         //there is enough free space here, so put it there
@@ -307,7 +307,7 @@ class StoreDirect(
         volume.putLong(masterLinkOffset, parity4Set(newMasterLinkValue))
     }
 
-    protected fun longStackNewChunk(masterLinkOffset: Long, prevPageOffset: Long, value: Long, valueSize:Long, recursive: Boolean) {
+    protected fun longStackNewChunk(masterLinkOffset: Long, prevPageOffset: Long, value: Long, valueSize:Long) {
         if(CC.ASSERT) {
             Utils.assertLocked(structuralLock)
         }
@@ -324,21 +324,18 @@ class StoreDirect(
             throw DBException.DataCorruption("wrong master link")
 
         var newChunkSize:Long = -1L
-        if(!recursive){
-            // In this case do not allocate fixed size, but try to reuse existing free space.
-            // That reduces fragmentation. But can not be used in recursion
 
-            sizeLoop@ for(size in LONG_STACK_MAX_SIZE downTo  LONG_STACK_MIN_SIZE step 16){
-                val masterLinkOffset2 = longStackMasterLinkOffset(size)
-                if (masterLinkOffset == masterLinkOffset2) {
-                    //we can not modify the same long stack, so skip
-                    continue@sizeLoop
-                }
-                val indexVal = parity4Get(volume.getLong(masterLinkOffset2))
-                if (indexVal != 0L) {
-                    newChunkSize = size
-                    break@sizeLoop
-                }
+        // In this case do not allocate fixed size, but try to reuse existing free space.
+        sizeLoop@ for(size in LONG_STACK_MAX_SIZE downTo  LONG_STACK_MIN_SIZE step 16){
+            val masterLinkOffset2 = longStackMasterLinkOffset(size)
+            if (masterLinkOffset == masterLinkOffset2) {
+                //we can not modify the same long stack, so skip
+                continue@sizeLoop
+            }
+            val indexVal = parity4Get(volume.getLong(masterLinkOffset2))
+            if (indexVal != 0L) {
+                newChunkSize = size
+                break@sizeLoop
             }
         }
 
@@ -365,7 +362,7 @@ class StoreDirect(
             throw AssertionError()
 
         //by now we should have determined size to take, so just take it
-        val newChunkOffset:Long = allocateData(newChunkSize.toInt(), true)  //TODO recursive=true here is too paranoid, and could be improved
+        val newChunkOffset:Long = allocateData(newChunkSize.toInt(), false)
         if(!CC.ZEROS)
             volume.clear(newChunkOffset, newChunkOffset+newChunkSize) //zeroes are used to determine end of stack page, so it must be zeroed out, even if allocateData does not clear out pages
 
